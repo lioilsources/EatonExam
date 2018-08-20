@@ -43,34 +43,81 @@ namespace EatonExam
         }
     }
 
-    class MainClass
+    class Message
     {
-        public static char GetRandomDevice(string deviceIds, Random rng)
+        public char DeviceId { get; set; }
+        public int Measurement { get; set; }
+    }
+
+    class MonitorDevice
+    {
+        List<Message> queue = new List<Message>();
+
+        public void AddMessage(Message m)
         {
-            int index = rng.Next(deviceIds.Length);
-            return deviceIds[index];
+            lock (queue)
+            {
+                queue.Add(m);
+            }
         }
 
-        public static int GetRandomMeasurement(Random rng) => rng.Next(0, 999);
+        public List<Message> ListMessages() => queue;
+    }
 
+    class MeasuringDevice
+    {
+        char deviceId;
+        Random rng = new Random();
+        MonitorDevice monitor;
+
+        public MeasuringDevice(char deviceId, MonitorDevice monitor)
+        {
+            this.deviceId = deviceId;
+            this.monitor = monitor;
+        }
+
+        public int GetRandomMeasurement(Random rng) => rng.Next(0, 999);
+
+        public void Run()
+        {
+            var message = new Message
+            {
+                DeviceId = deviceId,
+                Measurement = GetRandomMeasurement(rng)
+            };
+            monitor.AddMessage(message);
+        }
+    }
+
+    class MainClass
+    {
         public static void Main(string[] args)
         {
             var rng = new Random();
             var messagesCount = 1000;
-            var devices = "ABCDEFGHIJKLM";
+            var deviceIds = "ABCDEFGHIJKLM";
 
+            var monitor = new MonitorDevice();
+
+            var numOfDevices = deviceIds.Length - 1;
+            var devices = ToolEx.Range(0, numOfDevices)
+            .Select(index => new MeasuringDevice(deviceIds[index], monitor)).ToArray();
+            
             ToolEx.Range(0, messagesCount)
-            .Select(i => new
+            .Each(i =>
             {
-                Device = GetRandomDevice(devices, rng),
-                Measurement = GetRandomMeasurement(rng)
-            })
-            .GroupBy(m => m.Device)
+                var device = devices[rng.Next(0, numOfDevices)];
+                device.Run();
+            });
+    
+            monitor.ListMessages()
+            .GroupBy(m => m.DeviceId)
             .Select(g => new
             {
                 Device = g.Key,
                 MessageCount = g.Count()
             })
+            .OrderBy(r => r.Device)
             .Each(result => Console.WriteLine($"Device {result.Device}: {result.MessageCount}x measurements"));
         }
     }
