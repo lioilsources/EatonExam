@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 
 namespace EatonExam
 {
@@ -67,25 +68,34 @@ namespace EatonExam
     class MeasuringDevice
     {
         char deviceId;
-        Random rng = new Random();
+        int numOfMessages;
+
+        Random rng;
         MonitorDevice monitor;
 
-        public MeasuringDevice(char deviceId, MonitorDevice monitor)
+        public MeasuringDevice(int index, char deviceId, MonitorDevice monitor)
         {
             this.deviceId = deviceId;
             this.monitor = monitor;
+
+            this.rng = new Random(index);
+            this.numOfMessages = rng.Next(0, 99);
         }
 
-        public int GetRandomMeasurement(Random rng) => rng.Next(0, 999);
+        int GetRandomMeasurement() => rng.Next(0, 999);
 
         public void Run()
         {
-            var message = new Message
+            for (int i = 0; i < numOfMessages; i++)
             {
-                DeviceId = deviceId,
-                Measurement = GetRandomMeasurement(rng)
-            };
-            monitor.AddMessage(message);
+                var message = new Message
+                {
+                    DeviceId = deviceId,
+                    Measurement = GetRandomMeasurement()
+                };
+                //Thread.Sleep(10);
+                monitor.AddMessage(message);
+            }
         }
     }
 
@@ -94,20 +104,18 @@ namespace EatonExam
         public static void Main(string[] args)
         {
             var rng = new Random();
-            var messagesCount = 1000;
-            var deviceIds = "ABCDEFGHIJKLM";
+            var deviceIds = "ABCD";
 
             var monitor = new MonitorDevice();
 
             var numOfDevices = deviceIds.Length - 1;
-            var devices = ToolEx.Range(0, numOfDevices)
-            .Select(index => new MeasuringDevice(deviceIds[index], monitor)).ToArray();
-            
-            ToolEx.Range(0, messagesCount)
-            .Each(i =>
+            ToolEx.Range(0, numOfDevices)
+            .Select(index => new MeasuringDevice(index, deviceIds[index], monitor))
+            .Each(device =>
             {
-                var device = devices[rng.Next(0, numOfDevices)];
-                device.Run();
+                var t = new Thread(device.Run);
+                t.Start();
+                t.Join();
             });
     
             monitor.ListMessages()
