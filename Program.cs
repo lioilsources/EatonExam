@@ -44,52 +44,52 @@ namespace EatonExam
         }
     }
 
-    class Message
+    class DevicesEnvironment
     {
-        public char DeviceId { get; set; }
-        public int Measurement { get; set; }
-    }
+        readonly MonitorDevice monitor;
+        readonly string deviceIds;
 
-    class MonitorDevice
-    {
-        List<Message> queue = new List<Message>();
+        static CountdownEvent countdownSynchronization;
 
-        public void AddMessage(Message m)
+        public class Message
         {
-            lock (queue)
-            {
-                queue.Add(m);
-                Console.WriteLine($"[{m.DeviceId},{m.Measurement}]");
-            }
+            public char DeviceId { get; set; }
+            public int Measurement { get; set; }
         }
 
-        public List<Message> ListMessages() => queue;
-    }
-
-
-
-    class MainClass
-    {
-        static CountdownEvent _countdown;
-
-        class MeasuringDevice
+        public class MonitorDevice
         {
-            char deviceId;
-            int numOfMessages;
-            int frequency;
+            List<Message> queue = new List<Message>();
+
+            public void AddMessage(Message m)
+            {
+                lock (queue)
+                {
+                    queue.Add(m);
+                    //Console.WriteLine($"[{m.DeviceId},{m.Measurement}]");
+                }
+            }
+
+            public List<Message> ListMessages() => queue;
+        }
+
+        public class MeasuringDevice
+        {
+            readonly char deviceId;
+            readonly int numOfMessages;
+            readonly int frequency;
 
             Random rng;
-            MonitorDevice monitor;
+            readonly MonitorDevice monitor;
 
-            public MeasuringDevice(int index, char deviceId, MonitorDevice monitor, int frequency)
+            public MeasuringDevice(int randomSeed, char deviceId, MonitorDevice monitor)
             {
                 this.deviceId = deviceId;
                 this.monitor = monitor;
 
-                this.rng = new Random(index);
-                this.numOfMessages = 100; //rng.Next(0, 99);
-
-                this.frequency = frequency;
+                this.rng = new Random(randomSeed);
+                this.numOfMessages = rng.Next(0, 99);
+                this.frequency = rng.Next(0, 10);
             }
 
             int GetRandomMeasurement() => rng.Next(0, 999);
@@ -103,38 +103,38 @@ namespace EatonExam
                         DeviceId = deviceId,
                         Measurement = GetRandomMeasurement()
                     };
-                    Thread.Sleep(frequency);
                     monitor.AddMessage(message);
+
+                    Thread.Sleep(frequency);
                 }
 
-                _countdown.Signal();
+                DevicesEnvironment.SingnalCountdown();
             }
         }
 
-        public static void Main(string[] args)
+        public DevicesEnvironment(string deviceIds)
         {
-            var rng = new Random();
-            var deviceIds = "ABCD";
-            var frequencies = new int[] { 100, 50, 20, 10 };
+            this.deviceIds = deviceIds;
+            this.monitor = new MonitorDevice();
 
+            countdownSynchronization = new CountdownEvent(deviceIds.Length);
+        }
 
+        int GetNumOfDevices() => deviceIds.Length - 1;
 
-            var monitor = new MonitorDevice();
+        static void SingnalCountdown() => countdownSynchronization.Signal();
 
-            var numOfDevices = deviceIds.Length - 1;
+        public void RunMeasuringDevices()
+        {
+            ToolEx.Range(0, GetNumOfDevices())
+            .Select(index => new MeasuringDevice(index, deviceIds[index], monitor))
+            .Each(device => new Thread(device.Run).Start());
+        }
 
-            _countdown = new CountdownEvent(deviceIds.Length);
+        public void PrintMeasurements()
+        {
+            countdownSynchronization.Wait();
 
-            ToolEx.Range(0, numOfDevices)
-            .Select(index => new MeasuringDevice(index, deviceIds[index], monitor, frequencies[index]))
-            .Each(device =>
-            {
-                var t = new Thread(device.Run);
-                t.Start();
-            });
-
-            _countdown.Wait();
-    
             monitor.ListMessages()
             .GroupBy(m => m.DeviceId)
             .Select(g => new
@@ -144,6 +144,16 @@ namespace EatonExam
             })
             .OrderBy(r => r.Device)
             .Each(result => Console.WriteLine($"Device {result.Device}: {result.MessageCount}x measurements"));
+        }
+    }
+
+    class MainClass
+    {
+        public static void Main(string[] args)
+        {
+            var system = new DevicesEnvironment("ABC");
+            system.RunMeasuringDevices();
+            system.PrintMeasurements();
         }
     }
 }
