@@ -51,13 +51,13 @@ namespace EatonExam
 
         static CountdownEvent countdownSynchronization;
 
-        public class Message
+        class Message
         {
             public char DeviceId { get; set; }
             public int Measurement { get; set; }
         }
 
-        public class MonitorDevice
+        class MonitorDevice
         {
             List<Message> queue = new List<Message>();
 
@@ -73,7 +73,7 @@ namespace EatonExam
             public List<Message> ListMessages() => queue;
         }
 
-        public class MeasuringDevice
+        class MeasuringDevice
         {
             readonly char deviceId;
             readonly int numOfMessages;
